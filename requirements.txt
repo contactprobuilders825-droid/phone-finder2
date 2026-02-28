@@ -1,0 +1,3 @@
+uflash
+pymata-express
+pyserial

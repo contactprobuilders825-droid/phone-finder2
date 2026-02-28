@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 
 from .adapters import build_adapter_program
 from .db import bootstrap_default_users, get_user, init_db
+from .deployment import flash_microbit, upload_mblock_serial
 from .models import DeviceTarget, Phone, Role, User
 from .rbac import Permission, ensure_permission
 
@@ -63,6 +64,31 @@ class PhoneFinderService:
             f"{actor.username} a généré un adaptateur {target} ({len(phones)} téléphone(s))."
         )
         return program
+
+
+    def deploy_adapter(
+        self,
+        actor: User,
+        target: DeviceTarget,
+        program: str,
+        *,
+        port: str | None = None,
+    ) -> str:
+        ensure_permission(actor.role, Permission.DOWNLOAD_ADAPTER)
+
+        if target == DeviceTarget.MICROBIT:
+            flashed_source = flash_microbit(program_source=program, port=port)
+            self.audit_log.append(f"{actor.username} a flashé micro:bit ({port or 'auto'}).")
+            return flashed_source
+
+        if target == DeviceTarget.MBLOCK:
+            if not port:
+                raise ValueError("Le port série est obligatoire pour mBlock.")
+            upload_mblock_serial(payload=program, port=port)
+            self.audit_log.append(f"{actor.username} a envoyé un programme mBlock ({port}).")
+            return port
+
+        raise ValueError(f"Cible {target} non prise en charge pour le déploiement.")
 
     def add_target(self, actor: User, target: DeviceTarget) -> None:
         ensure_permission(actor.role, Permission.MANAGE_TARGETS)

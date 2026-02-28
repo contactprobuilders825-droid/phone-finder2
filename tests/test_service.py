@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from phone_finder.db import connect, list_users, upsert_user
 from phone_finder.models import DeviceTarget, Role, User
@@ -52,6 +53,35 @@ class PhoneFinderServiceTests(unittest.TestCase):
         usernames = [user.username for user in list_users(self.conn)]
         self.assertIn("prof2", usernames)
         self.assertIn("owner", usernames)
+
+    @patch("phone_finder.service.flash_microbit", return_value="/tmp/script.py")
+    def test_deploy_microbit_uses_uflash_wrapper(self, mock_flash) -> None:
+        admin = self.service.resolve_user("direction")
+        result = self.service.deploy_adapter(
+            admin,
+            DeviceTarget.MICROBIT,
+            "from microbit import *\n",
+            port="/media/MICROBIT",
+        )
+        self.assertEqual("/tmp/script.py", result)
+        mock_flash.assert_called_once()
+
+    def test_deploy_mblock_requires_serial_port(self) -> None:
+        admin = self.service.resolve_user("direction")
+        with self.assertRaises(ValueError):
+            self.service.deploy_adapter(admin, DeviceTarget.MBLOCK, "payload")
+
+    @patch("phone_finder.service.upload_mblock_serial")
+    def test_deploy_mblock_uses_pyserial_wrapper(self, mock_upload) -> None:
+        admin = self.service.resolve_user("direction")
+        result = self.service.deploy_adapter(
+            admin,
+            DeviceTarget.MBLOCK,
+            "payload",
+            port="COM3",
+        )
+        self.assertEqual("COM3", result)
+        mock_upload.assert_called_once_with(payload="payload", port="COM3")
 
 
 if __name__ == "__main__":

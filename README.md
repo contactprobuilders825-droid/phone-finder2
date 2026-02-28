@@ -11,10 +11,26 @@ Le système intègre 3 rôles persistés en **base SQL (SQLite)** :
 - `admin` (direction) : idem + accès audit,
 - `super_admin` (owner) : tous les droits.
 
-## Architecture (v2)
+## Dépendances matériel
+
+Le projet utilise les bibliothèques demandées :
+
+- `uflash` pour flasher les cartes micro:bit,
+- `pymata-express` pour piloter/sonder les robots compatibles,
+- `pyserial` pour envoyer un programme sur port série (mBlock).
+
+## Installation client + compilation automatique
+
+Le fichier `INSTALL_CLIENT.txt` contient une commande unique pour :
+
+1. installer les dépendances,
+2. compiler automatiquement le code Python sur le poste client.
+
+## Architecture (v3)
 
 - `src/phone_finder/db.py` : gestion SQL (`users`) et bootstrap des rôles.
-- `src/phone_finder/service.py` : logique métier + contrôle d'accès.
+- `src/phone_finder/service.py` : logique métier + contrôle d'accès + déploiement matériel.
+- `src/phone_finder/deployment.py` : intégration `uflash`, `pymata-express`, `pyserial`.
 - `src/phone_finder/adapters.py` : génération du programme mBlock / micro:bit.
 
 ## Lancer la démo
