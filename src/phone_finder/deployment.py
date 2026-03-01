@@ -29,9 +29,9 @@ def upload_mblock_serial(payload: str, *, port: str, baudrate: int = 115200) -> 
         connection.flush()
 
 
-async def probe_mblock_with_pymata(port: str) -> str:
+def probe_mblock_with_pymata(port: str) -> str:
     """Initialise une connexion pymata-express pour vérifier le robot mBlock."""
     pymata = importlib.import_module("pymata_express")
     board = pymata.pymata_express.PymataExpress(com_port=port)
-    await board.shutdown()
+    board.shutdown()
     return port

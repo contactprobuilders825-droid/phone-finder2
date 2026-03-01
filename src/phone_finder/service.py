@@ -4,9 +4,10 @@ import sqlite3
 from dataclasses import dataclass, field
 
 from .adapters import build_adapter_program
+from .billing import FeatureLimitError, PricingPlan
 from .db import bootstrap_default_users, get_user, init_db
 from .deployment import flash_microbit, upload_mblock_serial
-from .models import DeviceTarget, Phone, Role, User
+from .models import DeviceTarget, Phone, Role, Tier, User
 from .rbac import Permission, ensure_permission
 
 
@@ -26,10 +27,15 @@ class PhoneFinderService:
 
     def resolve_user(self, username: str) -> User:
         if self.db_conn is None:
-            users = make_default_users()
-            if username not in users:
+            # Mode sans DB : utilisateurs par défaut en mémoire
+            default_users = {
+                "prof": User(username="prof", role=Role.USER),
+                "direction": User(username="direction", role=Role.ADMIN),
+                "owner": User(username="owner", role=Role.SUPER_ADMIN),
+            }
+            if username not in default_users:
                 raise LookupError(f"Utilisateur inconnu: {username}")
-            return users[username]
+            return default_users[username]
 
         user = get_user(self.db_conn, username)
         if user is None:
@@ -48,6 +54,11 @@ class PhoneFinderService:
             if device.get("kind") == "phone"
         ]
 
+        # Vérifier la limite de devices pour le tier Free
+        max_devices = PricingPlan.get_limit(actor.tier)
+        if len(phones) > max_devices:
+            raise FeatureLimitError(max_devices, len(phones), actor.tier)
+
         self.audit_log.append(
             f"{actor.username} a lancé une détection: {len(phones)} téléphone(s)."
         )
@@ -64,7 +75,6 @@ class PhoneFinderService:
             f"{actor.username} a généré un adaptateur {target} ({len(phones)} téléphone(s))."
         )
         return program
-
 
     def deploy_adapter(
         self,
@@ -99,13 +109,64 @@ class PhoneFinderService:
         ensure_permission(actor.role, Permission.VIEW_AUDIT_LOG)
         return list(self.audit_log)
 
+    def upgrade_to_premium(self, actor: User, subscription_id: str) -> None:
+        """Upgrade un utilisateur vers Premium via PayPal."""
+        from .billing import PayPalHelper
 
-def make_default_users() -> dict[str, User]:
-    return {
-        "prof": User(username="prof", role=Role.USER),
-        "direction": User(username="direction", role=Role.ADMIN),
-        "owner": User(username="owner", role=Role.SUPER_ADMIN),
-    }
+        if not PayPalHelper.verify_subscription(subscription_id):
+            raise ValueError("Souscription PayPal invalide ou expirée.")
+
+        # Mettre à jour l'utilisateur
+        updated_user = User(
+            username=actor.username,
+            role=actor.role,
+            tier=Tier.PREMIUM,
+            subscription_id=subscription_id,
+            device_count=actor.device_count,
+        )
+
+        if self.db_conn:
+            from .db import upsert_user
+
+            upsert_user(self.db_conn, updated_user)
+
+        self.audit_log.append(
+            f"{actor.username} a upgrader vers Premium (subscription: {subscription_id[:8]}...)"
+        )
+
+    def watch_ad_for_bonus(self, actor: User) -> int:
+        """Utilisateur regarde une pub, obtient 5 devices additionnels temporaires."""
+        if actor.tier != Tier.FREE:
+            raise ValueError("Seuls les utilisateurs Free peuvent regarder les pubs.")
+
+        ad_bonus = 5
+        max_devices = PricingPlan.get_limit(Tier.FREE)
+
+        new_count = min(actor.device_count + ad_bonus, max_devices)
+
+        # Mettre à jour
+        updated_user = User(
+            username=actor.username,
+            role=actor.role,
+            tier=actor.tier,
+            subscription_id=actor.subscription_id,
+            device_count=new_count,
+        )
+
+        if self.db_conn:
+            from .db import upsert_user
+
+            upsert_user(self.db_conn, updated_user)
+
+        self.audit_log.append(
+            f"{actor.username} a regardé une publicité (+{ad_bonus} devices temporaires)."
+        )
+        return new_count
+
+
+# Note: make_default_users() est remplacée par bootstrap_default_users() qui
+# persiste les utilisateurs en base de données. Cette fonction reste à titre de
+# référence pour les configurations sans base de données.
 
 
 def make_sql_service(db_conn: sqlite3.Connection) -> PhoneFinderService:

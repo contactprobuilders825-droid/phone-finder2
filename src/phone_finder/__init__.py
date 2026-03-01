@@ -1,5 +1,6 @@
 """Core package for Phone Finder."""
 
+from .billing import AdPlacement, BillingManager, FeatureLimitError, PayPalHelper, PricingPlan, Tier
 from .db import bootstrap_default_users, connect, get_user, init_db, list_users, upsert_user
 from .deployment import flash_microbit, probe_mblock_with_pymata, upload_mblock_serial
 from .models import DeviceTarget, Phone, Role, User
@@ -9,6 +10,7 @@ __all__ = [
     "DeviceTarget",
     "Phone",
     "Role",
+    "Tier",
     "User",
     "PhoneFinderService",
     "make_sql_service",
@@ -21,4 +23,9 @@ __all__ = [
     "flash_microbit",
     "upload_mblock_serial",
     "probe_mblock_with_pymata",
+    "PricingPlan",
+    "FeatureLimitError",
+    "AdPlacement",
+    "BillingManager",
+    "PayPalHelper",
 ]

@@ -1,7 +1,8 @@
+from enum import Enum
 from .models import Role
 
 
-class Permission:
+class Permission(str, Enum):
     DETECT_PHONES = "detect_phones"
     DOWNLOAD_ADAPTER = "download_adapter"
     VIEW_AUDIT_LOG = "view_audit_log"
